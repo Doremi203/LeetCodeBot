@@ -6,6 +6,6 @@ public record UserEntity(
     long TelegramUserId,
     UserState State,
     Difficulty Difficulty,
-    TimeStamp Time,
+    TimeStamp TimeSetting,
     bool? IsPremium
     );
