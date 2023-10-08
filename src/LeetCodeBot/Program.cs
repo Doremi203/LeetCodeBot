@@ -1,24 +1,18 @@
 using LeetCodeBot;
-using LeetCodeBot.Dal.Repositories;
-using LeetCodeBot.Dal.Repositories.Interfaces;
+using LeetCodeBot.Extensions;
 using LeetCodeBot.HostedService;
 using LeetCodeBot.Services;
 using LeetCodeBot.Services.Interfaces;
 using Telegram.Bot;
 
 IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((context, services) =>
+    .ConfigureServices((builderContext, services) =>
     {
         // Register Bot configuration
         services.Configure<BotConfiguration>(
-            context.Configuration.GetSection(BotConfiguration.Configuration));
+            builderContext.Configuration.GetSection(BotConfiguration.Configuration));
 
-        // Register named HttpClient to benefits from IHttpClientFactory
-        // and consume it with ITelegramBotClient typed client.
-        // More read:
-        //  https://docs.microsoft.com/en-us/aspnet/core/fundamentals/http-requests?view=aspnetcore-5.0#typed-clients
-        //  https://docs.microsoft.com/en-us/dotnet/architecture/microservices/implement-resilient-applications/use-httpclientfactory-to-implement-resilient-http-requests
-        services.AddHttpClient("telegram_bot_client")
+       services.AddHttpClient("telegram_bot_client")
                 .AddTypedClient<ITelegramBotClient>((httpClient, sp) =>
                 {
                     BotConfiguration? botConfig = sp.GetConfiguration<BotConfiguration>();
@@ -29,10 +23,9 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddScoped<UpdateHandler>();
         services.AddScoped<ReceiverService>();
         services.AddScoped<IGetLeetcodeQuestionService, GetLeetcodeQuestionService>();
-        services.AddSingleton<IUserStateRepository, UserStateRepository>();
-        services.AddSingleton<IUserSettingsRepository, UserSettingsRepository>();
-        services.AddSingleton<ISolvedQuestionsRepository, SolvedQuestionsRepository>();
-        services.AddSingleton<IRegisteredUsersRepository, RegisteredUsersRepository>();
+        services
+            .AddDalRepositories();
+            //.AddDalInfrastructure(builderContext.Configuration);
         services.AddHostedService<PollingService>();
         services.AddHostedService<NotificationService>();
     })

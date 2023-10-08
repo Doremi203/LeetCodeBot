@@ -7,7 +7,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{F78E917D-8EF7-4FDF-A8FD-10EF266EBE67}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
+		docker-compose.yml = docker-compose.yml
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeetCodeBot.DB.IntegrationTests", "src\LeetCodeBot.DB.IntegrationTests\LeetCodeBot.DB.IntegrationTests.csproj", "{34DF0B9C-D5CD-4659-A8AF-82BF07278B55}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -19,8 +22,13 @@ Global
 		{D63486C4-D0B1-440D-8C4F-FED60BE67611}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D63486C4-D0B1-440D-8C4F-FED60BE67611}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D63486C4-D0B1-440D-8C4F-FED60BE67611}.Release|Any CPU.Build.0 = Release|Any CPU
+		{34DF0B9C-D5CD-4659-A8AF-82BF07278B55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{34DF0B9C-D5CD-4659-A8AF-82BF07278B55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{34DF0B9C-D5CD-4659-A8AF-82BF07278B55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{34DF0B9C-D5CD-4659-A8AF-82BF07278B55}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{D63486C4-D0B1-440D-8C4F-FED60BE67611} = {B0D4CE33-376A-4916-B500-3A1FDFF8B676}
+		{34DF0B9C-D5CD-4659-A8AF-82BF07278B55} = {B0D4CE33-376A-4916-B500-3A1FDFF8B676}
 	EndGlobalSection
 EndGlobal
