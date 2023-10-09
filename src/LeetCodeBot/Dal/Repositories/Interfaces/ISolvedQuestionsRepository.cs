@@ -5,6 +5,6 @@ namespace LeetCodeBot.Dal.Repositories.Interfaces;
 
 public interface ISolvedQuestionsRepository
 {
-    Task<ConcurrentBag<int>> GetAllSolvedQuestionsByUserIdAsync(long userId);
-    Task AddSolvedQuestionAsync(long userId, int problemId);
+    Task<IEnumerable<SolvedQuestionsEntity>> GetAllSolvedQuestionsByUserIdAsync(long userId);
+    Task AddSolvedQuestionAsync(long userId, SolvedQuestionsEntity solvedQuestion);
 }

@@ -1,7 +1,8 @@
 namespace LeetCodeBot.Dal.Entities;
 
-public record SolvedQuestionsEntity(
-    Guid Id,
-    long TelegramUserId, 
-    int QuestionId,
-    DateTime Time);
+public record SolvedQuestionsEntity
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public int QuestionId { get; init; }
+    public DateTime Date { get; init; }
+}
