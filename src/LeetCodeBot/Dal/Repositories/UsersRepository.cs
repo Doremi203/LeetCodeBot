@@ -3,27 +3,20 @@ using LeetCodeBot.Dal.Entities;
 using LeetCodeBot.Dal.Repositories.Interfaces;
 using LeetCodeBot.Dal.Settings;
 using LeetCodeBot.Enums;
+using LeetCodeBot.Exceptions;
 using Npgsql;
 
 namespace LeetCodeBot.Dal.Repositories;
 
-public class UsersRepository : IUsersRepository
+public class UsersRepository : BaseRepository, IUsersRepository
 {
-    private readonly string _connectionString;
-
     public UsersRepository(
-        IConfiguration configuration) 
-        : this(configuration.GetConnectionString("Default")) { }
-    
-    public UsersRepository(
-        string connectionString)
-    {
-        _connectionString = connectionString;
-    }
+        DalOptions dalOptions)
+    : base(dalOptions) { }
     
     public async Task AddUserAsync(UserEntity user)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(DalSettings.ConnectionString);
         await AddUserAsync(connection, user);
     }
     
@@ -37,9 +30,25 @@ public class UsersRepository : IUsersRepository
         await connection.QueryAsync(sqlQuery, user);
     }
 
-    public Task<UserEntity> GetUserAsync(long userId)
+    public async Task<UserEntity> GetUserAsync(long userId)
     {
-        throw new NotImplementedException();
+        await using var connection = new NpgsqlConnection(DalSettings.ConnectionString);
+        return await GetUserAsync(connection, userId);
+    }
+    
+    public static async Task<UserEntity> GetUserAsync(NpgsqlConnection connection, long userId)
+    {
+        const string sqlQuery = $@"
+            SELECT telegram_user_id, difficulty, time_setting, state, is_premium
+            FROM users
+            WHERE telegram_user_id = @UserId
+                ";
+        
+        var sqlQueryParams = new { UserId = userId };
+        
+        return await connection
+            .QueryFirstOrDefaultAsync<UserEntity>(sqlQuery, sqlQueryParams) 
+               ?? throw new UserNotFoundException($"User {userId} not found");
     }
 
     public Task DeleteUserAsync(long userId)
@@ -52,7 +61,7 @@ public class UsersRepository : IUsersRepository
         throw new NotImplementedException();
     }
 
-    public Task<IAsyncEnumerable<UserEntity>> GetUsersAsync(TimeStamp timeStamp)
+    public Task<IEnumerable<UserEntity>> GetUsersAsync(TimeStamp timeStamp)
     {
         throw new NotImplementedException();
     }

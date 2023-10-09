@@ -9,5 +9,5 @@ public interface IUsersRepository
     Task<UserEntity> GetUserAsync(long userId);
     Task DeleteUserAsync(long userId);
     Task UpdateUserAsync(UserEntity user);
-    Task<IAsyncEnumerable<UserEntity>> GetUsersAsync(TimeStamp timeStamp);
+    Task<IEnumerable<UserEntity>> GetUsersAsync(TimeStamp timeStamp);
 }
