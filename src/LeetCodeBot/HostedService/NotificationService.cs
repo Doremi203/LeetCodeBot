@@ -87,9 +87,10 @@ public class NotificationService : BackgroundService
             var questions = await leetcodeQuestionService.GetLeetcodeQuestionsAsync(difficulty);
             var solvedQuestions = await _solvedQuestionsRepository.GetAllSolvedQuestionsByUserIdAsync(userId);
             var availableQuestions = questions
-                .Where(q 
+                /*.Where(q 
                     => !solvedQuestions
-                        .Contains(q.FrontendQuestionId))
+                            // TODO: check if it works
+                        .Contains<>(q.FrontendQuestionId))*/
                 .ToArray();
             question = availableQuestions[new Random().Next(0, availableQuestions.Length)];
         }
