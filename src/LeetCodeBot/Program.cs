@@ -24,8 +24,8 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddScoped<ReceiverService>();
         services.AddScoped<IGetLeetcodeQuestionService, GetLeetcodeQuestionService>();
         services
-            .AddDalRepositories();
-            //.AddDalInfrastructure(builderContext.Configuration);
+            .AddDalRepositories()
+            .AddDalInfrastructure(builderContext.Configuration);
         services.AddHostedService<PollingService>();
         services.AddHostedService<NotificationService>();
     })
