@@ -1,3 +1,4 @@
+using LeetCodeBot.Dal.Entities;
 using LeetCodeBot.Dal.Repositories.Interfaces;
 using LeetCodeBot.Enums;
 using Telegram.Bot;
@@ -430,7 +431,12 @@ public class UpdateHandler : IUpdateHandler
                 break;
             case "ProblemSolved":
                 var problemId = int.Parse(data[1]);
-                action = _solvedQuestionsRepository.AddSolvedQuestionAsync(userId, problemId);
+                action = _solvedQuestionsRepository
+                    .AddSolvedQuestionAsync(
+                        userId, 
+                        new SolvedQuestionsEntity{
+                            QuestionId = problemId, 
+                            Date = DateTime.UtcNow});
                 await _botClient.DeleteMessageAsync(userId, callbackQuery.Message!.MessageId, cancellationToken);
                 reply = $"Problem {problemId} marked as solved.";
                 break;
