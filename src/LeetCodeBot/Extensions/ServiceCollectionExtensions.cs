@@ -23,6 +23,8 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<DalOptions>(configuration.GetSection(nameof(DalOptions)));
         
+        Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+        
         return services;
     }
 }
