@@ -3,94 +3,75 @@ using LeetCodeBot.Enums;
 using LeetCodeBot.Models;
 using LeetCodeBot.Services.Interfaces;
 using Telegram.Bot;
-using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace LeetCodeBot.HostedService;
 
 public class NotificationService : BackgroundService
 {
-    private readonly IUserSettingsRepository _userSettingsRepository;
-    private readonly ISolvedQuestionsRepository _solvedQuestionsRepository;
     private readonly ITelegramBotClient _telegramBotClient;
-    private readonly IUserStateRepository _userStateRepository;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<NotificationService> _logger;
 
     public NotificationService(
-        IUserSettingsRepository userSettingsRepository,
-        ISolvedQuestionsRepository solvedQuestionsRepository,
         ITelegramBotClient telegramBotClient,
-        IUserStateRepository userStateRepository,
-        IServiceProvider serviceProvider
-        )
+        IServiceProvider serviceProvider,
+        ILogger<NotificationService> logger)
     {
-        _userSettingsRepository = userSettingsRepository;
-        _solvedQuestionsRepository = solvedQuestionsRepository;
         _telegramBotClient = telegramBotClient;
-        _userStateRepository = userStateRepository;
         _serviceProvider = serviceProvider;
+        _logger = logger;
     }
     
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            var users = _userSettingsRepository.GetAll();
-            foreach (var user in users)
+            var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
+            var moscowTime = TimeZoneInfo.ConvertTimeToUtc(DateTime.Now);
+            moscowTime = TimeZoneInfo.ConvertTimeFromUtc(moscowTime, moscowTimeZone);
+            var time = moscowTime.Hour switch
             {
-                var time = user.Time;
-                var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
-                var now = TimeZoneInfo.ConvertTimeToUtc(DateTime.Now);
-                now = TimeZoneInfo.ConvertTimeFromUtc(now, moscowTimeZone);
+                >= 10 and < 11 => TimeStamp.Ten,
+                >= 14 and < 15 => TimeStamp.Fourteen,
+                >= 18 and < 19 => TimeStamp.Sixteen,
+                >= 22 and < 23 => TimeStamp.TwentyTwo,
+                _ => TimeStamp.NotSet
+            };
 
-                if (user.Difficulty == Difficulty.NotSet)
-                    continue;
-                if (time == TimeStamp.NotSet)
-                    continue;
+            if (time != TimeStamp.NotSet)
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var usersRepository = scope.ServiceProvider.GetRequiredService<IUsersRepository>();
+                var users = (await usersRepository.GetUsersByTimeAsync(time)).ToArray();
 
-                if (now.Hour is >= 0 and <= 2)
+                foreach (var user in users)
                 {
-                    _userStateRepository.AddOrUpdateState(user.UserId, UserState.ToNotificate);
-                }
-                
-                if (!_userStateRepository.CheckState(user.UserId, UserState.ToNotificate))
-                    continue;
-                
-                switch (time)
-                {
-                    case TimeStamp.NotSet:
+                    if (user.Difficulty is null or Difficulty.NotSet)
                         continue;
-                    case TimeStamp.Ten when now.Hour is >= 10 and < 11:
-                    case TimeStamp.Fourteen when now.Hour is >= 14 and < 15:
-                    case TimeStamp.Sixteen when now.Hour is >= 18 and < 19:
-                    case TimeStamp.TwentyTwo when now.Hour is >= 22 and < 23:
-                        await SendNotification(user.UserId, user.Difficulty, stoppingToken);
-                        break;
-                    default:
-                        continue;
+
+                    await SendNotification(user.TelegramUserId, user.Difficulty.Value, stoppingToken);
                 }
             }
 
-            if (users.Any())
-                await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
-            else
-                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+            await Task.Delay(TimeSpan.FromMinutes(55), stoppingToken);
         }
     }
 
-    private async Task<Message> SendNotification(long userId, Difficulty difficulty, CancellationToken stoppingToken)
+    private async Task SendNotification(long userId, Difficulty difficulty, CancellationToken stoppingToken)
     {
         LeetcodeQuestionType? question;
         using (var scope = _serviceProvider.CreateScope())
         {
             var leetcodeQuestionService = scope.ServiceProvider.GetRequiredService<IGetLeetcodeQuestionService>();
+            var solvedQuestionsRepository = scope.ServiceProvider.GetRequiredService<ISolvedQuestionsRepository>();
             var questions = await leetcodeQuestionService.GetLeetcodeQuestionsAsync(difficulty);
-            var solvedQuestions = await _solvedQuestionsRepository.GetAllSolvedQuestionsByUserIdAsync(userId);
+            var solvedQuestions = (await solvedQuestionsRepository.GetAllSolvedQuestionsByUserIdAsync(userId))
+                .Select(entity => entity.QuestionId);
             var availableQuestions = questions
-                /*.Where(q 
+                .Where(q 
                     => !solvedQuestions
-                            // TODO: check if it works
-                        .Contains<>(q.FrontendQuestionId))*/
+                        .Contains(q.FrontendQuestionId))
                 .ToArray();
             question = availableQuestions[new Random().Next(0, availableQuestions.Length)];
         }
@@ -101,7 +82,7 @@ public class NotificationService : BackgroundService
                            $"Id: {question.FrontendQuestionId}\n" +
                            $"Link: https://leetcode.com/problems/{question.TitleSlug}";
         
-        _userStateRepository.AddOrUpdateState(userId, UserState.Notificated);
+        _logger.LogInformation($"MessageSent:{replyMessage} \n To user with UserId: {userId}");
         
         InlineKeyboardMarkup inlineKeyboard = new(
             new[]
@@ -111,11 +92,11 @@ public class NotificationService : BackgroundService
                     InlineKeyboardButton.WithCallbackData("Solved", $"ProblemSolved {question.FrontendQuestionId}"),
                 },
             });
-        
-        return await _telegramBotClient.SendTextMessageAsync(
+
+        await _telegramBotClient.SendTextMessageAsync(
             chatId: userId,
             text: replyMessage,
             replyMarkup: inlineKeyboard,
-            cancellationToken: stoppingToken);
+            cancellationToken: stoppingToken).ConfigureAwait(false);
     }
 }

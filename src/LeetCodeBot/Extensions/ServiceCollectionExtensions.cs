@@ -9,10 +9,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDalRepositories(
         this IServiceCollection services)
     {
-        services.AddScoped<IRegisteredUsersRepository, RegisteredUsersRepository>();
         services.AddScoped<ISolvedQuestionsRepository, SolvedQuestionsRepository>();
-        services.AddScoped<IUserSettingsRepository, UserSettingsRepository>();
-        services.AddScoped<IUserStateRepository, UserStateRepository>();
+        services.AddScoped<IUsersRepository, UsersRepository>();
         
         return services;
     }
