@@ -13,7 +13,8 @@
 /src/LeetCodeBot/appsettings.Development.json
 /src/LeetCodeBot/appsettings.json
 /src/LeetCodeBot/appsettings.Production.json
-docker-compose.yml
+docker-composeDevelop.yml
+docker-composeProd.yml
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

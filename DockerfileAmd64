@@ -1,12 +1,12 @@
-﻿FROM mcr.microsoft.com/dotnet/runtime:7.0 AS base
+﻿FROM mcr.microsoft.com/dotnet/runtime:7.0.12-bullseye-slim-amd64 AS base
 WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
-COPY ["Src/LeetCodeBot/LeetCodeBot.csproj", "Src/LeetCodeBot/"]
-RUN dotnet restore "Src/LeetCodeBot/LeetCodeBot.csproj"
+COPY ["src/LeetCodeBot/LeetCodeBot.csproj", "src/LeetCodeBot/"]
+RUN dotnet restore "src/LeetCodeBot/LeetCodeBot.csproj"
 COPY . .
-WORKDIR "/src/Src/LeetCodeBot"
+WORKDIR "/src/src/LeetCodeBot"
 RUN dotnet build "LeetCodeBot.csproj" -c Release -o /app/build
 
 FROM build AS publish
