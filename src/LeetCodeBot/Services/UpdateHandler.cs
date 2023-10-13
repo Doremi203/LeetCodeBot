@@ -1,3 +1,4 @@
+using LeetCodeBot.Dal.Entities;
 using LeetCodeBot.Dal.Repositories.Interfaces;
 using LeetCodeBot.Enums;
 using Telegram.Bot;
@@ -13,10 +14,8 @@ public class UpdateHandler : IUpdateHandler
 {
     private readonly ITelegramBotClient _botClient;
     private readonly ILogger<UpdateHandler> _logger;
-    private readonly IRegisteredUsersRepository _registeredUsersRepository;
-    private readonly IUserStateRepository _userStateRepository;
-    private readonly IUserSettingsRepository _userSettingsRepository;
     private readonly ISolvedQuestionsRepository _solvedQuestionsRepository;
+    private readonly IUsersRepository _usersRepository;
 
     private ReplyKeyboardMarkup _menuKeyboardMarkup = new(
         new[]
@@ -33,18 +32,14 @@ public class UpdateHandler : IUpdateHandler
     public UpdateHandler(
         ITelegramBotClient botClient,
         ILogger<UpdateHandler> logger,
-        IRegisteredUsersRepository registeredUsersRepository,
-        IUserStateRepository userStateRepository,
-        IUserSettingsRepository userSettingsRepository,
-        ISolvedQuestionsRepository solvedQuestionsRepository
+        ISolvedQuestionsRepository solvedQuestionsRepository,
+        IUsersRepository usersRepository
     )
     {
         _botClient = botClient;
         _logger = logger;
-        _registeredUsersRepository = registeredUsersRepository;
-        _userStateRepository = userStateRepository;
-        _userSettingsRepository = userSettingsRepository;
         _solvedQuestionsRepository = solvedQuestionsRepository;
+        _usersRepository = usersRepository;
     }
 
     public async Task HandleUpdateAsync(ITelegramBotClient _, Update update, CancellationToken cancellationToken)
@@ -71,68 +66,88 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task BotOnMessageReceived(Message message, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Receive message type: {MessageType}", message.Type);
+        _logger.LogInformation($"Receive message type: {message.Type} from: Userid = {message.From?.Id}, Username = {message.From?.Username}.");
         if (message.Text is not { } messageText)
             return;
         
         var userId = message.From!.Id;
-        Task<Message>? action;
-
-        switch (_userStateRepository.GetState(userId))
+        Task<Message>? action = null;
+        var curUser = await _usersRepository.GetUserAsync(userId);
+        if (curUser is null)
         {
-            case UserState.NewUser:
-                action = messageText switch
-                {
-                    "/start" => Start(),
-                    _ => null
-                };
-                break;
-            case UserState.TimeSetup:
-                action = messageText switch
-                {
-                    "10:00" => SetupTime(TimeStamp.Ten),
-                    "14:00" => SetupTime(TimeStamp.Fourteen),
-                    "18:00" => SetupTime(TimeStamp.Sixteen),
-                    "22:00" => SetupTime(TimeStamp.TwentyTwo),
-                    _ => null
-                };
-                break;
-            case UserState.DifficultySetup:
-                action = messageText switch
-                {
-                    "Easy" => AddDifficulty(Difficulty.Easy),
-                    "Medium" => AddDifficulty(Difficulty.Medium),
-                    "Hard" => AddDifficulty(Difficulty.Hard),
-                    "Any" => AddDifficulty(Difficulty.Any),
-                    "Save difficulty" => SaveDifficulty(),
-                    _ => null
-                };
-                break;
-            case UserState.ToNotificate:
-            case UserState.Notificated:
-                action = messageText switch
-                {
-                    "Get settings" => GetUserSettings(),
-                    "Change notification time" => SendTimeReplyKeyboard(),
-                    "Change difficulty" => SendInlineDifficultySetupKeyboard(),
-                    "Unsubscribe from the bot" => UnsubscribeFromBot(),
-                    "Subscribe to the bot" => SendTimeReplyKeyboard(),
-                    _ => null
-                };
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
+            action = Start();
+        }
+        else
+        {
+            switch (curUser.State)
+            {
+                case UserState.TimeSetup:
+                    action = messageText switch
+                    {
+                        "10:00" => SetupTime(TimeStamp.Ten),
+                        "14:00" => SetupTime(TimeStamp.Fourteen),
+                        "18:00" => SetupTime(TimeStamp.Sixteen),
+                        "22:00" => SetupTime(TimeStamp.TwentyTwo),
+                        _ => null
+                    };
+                    break;
+                case UserState.DifficultySetup:
+                    action = messageText switch
+                    {
+                        "Easy" => AddDifficulty(userId, Difficulty.Easy, cancellationToken),
+                        "Medium" => AddDifficulty(userId, Difficulty.Medium, cancellationToken),
+                        "Hard" => AddDifficulty(userId, Difficulty.Hard, cancellationToken),
+                        "Any" => AddDifficulty(userId, Difficulty.Any, cancellationToken),
+                        "Save difficulty" => SaveDifficulty(),
+                        _ => null
+                    };
+                    break;
+                case UserState.Registered:
+                    switch (messageText)
+                    {
+                        case "Get settings":
+                            action = GetUserSettings();
+                            break;
+                        case "Change notification time":
+                            action = SendTimeReplyKeyboard();
+                            break;
+                        case "Change difficulty":
+                            await SendInlineDifficultySetupKeyboard();
+                            break;
+                        case "Unsubscribe from the bot":
+                            action = UnsubscribeFromBot();
+                            break;
+                        case "Subscribe to the bot":
+                            action = SendTimeReplyKeyboard();
+                            break;
+                        default:
+                            action = null;
+                            break;
+                    }
+
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         if (action != null)
         {
-            Message sentMessage = await action;
-            _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+            var sentMessage = await action;
+            _logger.LogInformation($"The message with id = {sentMessage.MessageId}: \n {sentMessage.Text} \n was sent to user: Userid = {userId}, Username = {message.From?.Username}");
         }
-        
+
+        return;
+
         async Task<Message> UnsubscribeFromBot()
         {
-            await _userSettingsRepository.SetTimeAsync(userId, TimeStamp.NotSet);
+            //await _userSettingsRepository.SetTimeAsync(userId, TimeStamp.NotSet);
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    TimeSetting = TimeStamp.NotSet
+                });
         
             return await _botClient.SendTextMessageAsync(
                 chatId: userId,
@@ -143,9 +158,10 @@ public class UpdateHandler : IUpdateHandler
         
         async Task<Message> GetUserSettings()
         {
-            var userSettings = await _userSettingsRepository.GetAsync(userId);
+            //var userSettings = await _userSettingsRepository.GetAsync(userId);
+            var user = await _usersRepository.GetUserAsync(userId);
         
-            var time = userSettings.Time switch
+            var time = user.TimeSetting switch
             {
                 TimeStamp.Ten => "10:00",
                 TimeStamp.Fourteen => "14:00",
@@ -154,7 +170,7 @@ public class UpdateHandler : IUpdateHandler
                 _ => "Not set"
             };
 
-            var difficulty = userSettings.Difficulty.ToString();
+            var difficulty = user.Difficulty.ToString();
         
             var replyMessage = $"Time: {time}\n" +
                                $"Difficulty: {difficulty}";
@@ -165,7 +181,7 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
         
-        async Task<Message> SendInlineDifficultySetupKeyboard()
+        async Task SendInlineDifficultySetupKeyboard()
     {
         const string replyMessage = "Tinker difficulty:";
         
@@ -220,27 +236,28 @@ public class UpdateHandler : IUpdateHandler
             text: "Hard",
             replyMarkup: hardInlineKeyboard,
             cancellationToken: cancellationToken);
+        
+        await Task.Factory.StartNew(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
 
-        await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
-        
-        await _botClient.DeleteMessageAsync(
-            chatId: userId,
-            messageId: m.MessageId,
-            cancellationToken: cancellationToken);
-        await _botClient.DeleteMessageAsync(
-            chatId: userId,
-            messageId: easyMessage.MessageId,
-            cancellationToken: cancellationToken);
-        await _botClient.DeleteMessageAsync(
-            chatId: userId,
-            messageId: mediumMessage.MessageId,
-            cancellationToken: cancellationToken);
-        await _botClient.DeleteMessageAsync(
-            chatId: userId,
-            messageId: hardMessage.MessageId,
-            cancellationToken: cancellationToken);
-        
-        return m;
+            await _botClient.DeleteMessageAsync(
+                chatId: userId,
+                messageId: m.MessageId,
+                cancellationToken: cancellationToken);
+            await _botClient.DeleteMessageAsync(
+                chatId: userId,
+                messageId: easyMessage.MessageId,
+                cancellationToken: cancellationToken);
+            await _botClient.DeleteMessageAsync(
+                chatId: userId,
+                messageId: mediumMessage.MessageId,
+                cancellationToken: cancellationToken);
+            await _botClient.DeleteMessageAsync(
+                chatId: userId,
+                messageId: hardMessage.MessageId,
+                cancellationToken: cancellationToken);
+        }, cancellationToken);
     }
         
         async Task<Message> SendTimeReplyKeyboard()
@@ -257,7 +274,13 @@ public class UpdateHandler : IUpdateHandler
                 ResizeKeyboard = true
             };
             
-            _userStateRepository.AddOrUpdateState(userId, UserState.TimeSetup);
+            //_userStateRepository.AddOrUpdateState(userId, UserState.TimeSetup);
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    State = UserState.TimeSetup
+                });
 
             return await _botClient.SendTextMessageAsync(
                 chatId: userId,
@@ -282,8 +305,13 @@ public class UpdateHandler : IUpdateHandler
             {
                 ResizeKeyboard = true
             };
-
-            _userStateRepository.AddOrUpdateState(userId, UserState.DifficultySetup);
+            
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    State = UserState.DifficultySetup
+                });
 
             return await _botClient.SendTextMessageAsync(
                 chatId: userId,
@@ -309,7 +337,15 @@ public class UpdateHandler : IUpdateHandler
             const string replyMessageText = $"This bot sends coding problem from LeetCode at chosen time.";
         
             //userStateRepository.AddOrUpdateState(message.From!.Id, UserState.InitialSetUp);
-            await _userSettingsRepository.AddUserAsync(userId);
+            //await _userSettingsRepository.AddUserAsync(userId);
+            await _usersRepository.AddUserAsync(new UserEntity
+            {
+                TelegramUserId = userId,
+                State = UserState.NewUser,
+                IsPremium = false,
+                Difficulty = Difficulty.NotSet,
+                TimeSetting = TimeStamp.NotSet
+            });
         
             await _botClient.SendTextMessageAsync(
                 chatId: userId,
@@ -321,7 +357,8 @@ public class UpdateHandler : IUpdateHandler
         
         async Task<Message> SaveDifficulty()
         {
-            if ((await _userSettingsRepository.GetAsync(userId)).Difficulty == Difficulty.NotSet)
+            //if ((await _userSettingsRepository.GetAsync(userId)).Difficulty == Difficulty.NotSet)
+            if ((await _usersRepository.GetUserAsync(userId)).Difficulty == Difficulty.NotSet)
             {
                 return await _botClient.SendTextMessageAsync(
                     chatId: userId,
@@ -331,8 +368,14 @@ public class UpdateHandler : IUpdateHandler
             const string replyMessageText =
                 $"You are registered. You will receive notifications at chosen time and with chosen difficulty.";
         
-            _userStateRepository.AddOrUpdateState(userId, UserState.ToNotificate);
-            _registeredUsersRepository.Add(userId);
+            //_userStateRepository.AddOrUpdateState(userId, UserState.ToNotificate);
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    State = UserState.Registered
+                });
+            //_registeredUsersRepository.Add(userId);
 
             return await _botClient.SendTextMessageAsync(
                 chatId: userId,
@@ -341,37 +384,20 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
         
-        async Task<Message> AddDifficulty(Difficulty difficulty)
-        {
-            var replyMessageText = $"Difficulty {difficulty} added.";
-        
-            await _userSettingsRepository.AddDifficultyAsync(message.From!.Id, difficulty);
-
-            return await _botClient.SendTextMessageAsync(
-                chatId: userId,
-                text: replyMessageText,
-                cancellationToken: cancellationToken);
-        }
-        
-        async Task<Message> RemoveDifficulty(Difficulty difficulty)
-        {
-            var replyMessageText = $"Difficulty {difficulty} removed.";
-        
-            await _userSettingsRepository.RemoveDifficultyAsync(message.From!.Id, difficulty);
-
-            return await _botClient.SendTextMessageAsync(
-                chatId: userId,
-                text: replyMessageText,
-                cancellationToken: cancellationToken);
-        }
-        
         async Task<Message> SetupTime(TimeStamp time)
         {
             const string replyMessageText = $"Notification time chosen.";
 
-            await _userSettingsRepository.SetTimeAsync(userId, time);
-        
-            if (!_registeredUsersRepository.Contains(userId))
+            //await _userSettingsRepository.SetTimeAsync(userId, time);
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    TimeSetting = time
+                });
+            
+            var user = await _usersRepository.GetUserAsync(userId);
+            if (user.Difficulty == Difficulty.NotSet)
             {
                 await _botClient.SendTextMessageAsync(
                     chatId: message.Chat.Id,
@@ -380,7 +406,13 @@ public class UpdateHandler : IUpdateHandler
                 return await SendDifficultyOptionsReplyKeyboard();
             }
 
-            _userStateRepository.AddOrUpdateState(userId, UserState.ToNotificate);
+            //_userStateRepository.AddOrUpdateState(userId, UserState.ToNotificate);
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    State = UserState.Registered
+                });
         
             return await _botClient.SendTextMessageAsync(
                 chatId: userId,
@@ -390,59 +422,120 @@ public class UpdateHandler : IUpdateHandler
         }
     }
 
+    private async Task<Message> AddDifficulty(long userId, Difficulty difficulty, CancellationToken cancellationToken)
+        {
+            var replyMessageText = $"Difficulty {difficulty} added.";
+        
+            //await _userSettingsRepository.AddDifficultyAsync(message.From!.Id, difficulty);
+            var user = await _usersRepository.GetUserAsync(userId);
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    Difficulty = difficulty switch
+                    {
+                        Difficulty.Easy => user.Difficulty | Difficulty.Easy,
+                        Difficulty.Medium => user.Difficulty | Difficulty.Medium,
+                        Difficulty.Hard => user.Difficulty | Difficulty.Hard,
+                        _ => throw new ArgumentOutOfRangeException(nameof(difficulty), difficulty, null)
+                    }
+                });
+
+            _logger.LogInformation($"Difficulty {difficulty} added to user with UserId: {userId}");
+
+            return await _botClient.SendTextMessageAsync(
+                chatId: userId,
+                text: replyMessageText,
+                cancellationToken: cancellationToken);
+        }
+
+    private async Task<Message> RemoveDifficulty(long userId, Difficulty difficulty, CancellationToken cancellationToken)
+        {
+            var replyMessageText = $"Difficulty {difficulty} removed.";
+        
+            //await _userSettingsRepository.RemoveDifficultyAsync(message.From!.Id, difficulty);
+            var user = await _usersRepository.GetUserAsync(userId);
+            await _usersRepository.UpdateUserAsync(
+                new UserEntity
+                {
+                    TelegramUserId = userId,
+                    Difficulty = difficulty switch
+                    {
+                        Difficulty.Easy => user.Difficulty & ~Difficulty.Easy,
+                        Difficulty.Medium => user.Difficulty & ~Difficulty.Medium,
+                        Difficulty.Hard => user.Difficulty & ~Difficulty.Hard,
+                        _ => throw new ArgumentOutOfRangeException(nameof(difficulty), difficulty, null)
+                    }
+                });
+            
+            _logger.LogInformation($"Difficulty {difficulty} removed from user with UserId: {userId}");
+            
+            return await _botClient.SendTextMessageAsync(
+                chatId: userId,
+                text: replyMessageText,
+                cancellationToken: cancellationToken);
+        }
+
     // Process Inline Keyboard callback data
     private async Task BotOnCallbackQueryReceived(
         CallbackQuery callbackQuery, 
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Received inline keyboard callback from: {CallbackQueryId}", callbackQuery.Id);
+        _logger.LogInformation($"Received inline keyboard callback from: Userid = {callbackQuery.From.Id}, Username = {callbackQuery.From.Username} \n data: {callbackQuery.Data}");
 
         var data = callbackQuery.Data!.Split();
         var userId = callbackQuery.From.Id;
-        
-        Task? action;
-        string? reply;
+
         switch (data[0])
         {
             case "EasyAdd":
-                action = _userSettingsRepository.AddDifficultyAsync(userId, Difficulty.Easy);
-                reply = "Difficulty Easy added.";
+                await AddDifficulty(userId, Difficulty.Easy, cancellationToken);
                 break;
             case "EasyRemove":
-                action = _userSettingsRepository.RemoveDifficultyAsync(userId, Difficulty.Easy);
-                reply = "Difficulty Easy removed.";
+                await RemoveDifficulty(userId, Difficulty.Easy, cancellationToken);
                 break;
             case "MediumAdd":
-                action = _userSettingsRepository.AddDifficultyAsync(userId, Difficulty.Medium);
-                reply = "Difficulty Medium added.";
+                await AddDifficulty(userId, Difficulty.Medium, cancellationToken);
                 break;
             case "MediumRemove":
-                action = _userSettingsRepository.RemoveDifficultyAsync(userId, Difficulty.Medium);
-                reply = "Difficulty Medium removed.";
+                await RemoveDifficulty(userId, Difficulty.Medium, cancellationToken);
                 break;
             case "HardAdd":
-                action = _userSettingsRepository.AddDifficultyAsync(userId, Difficulty.Hard);
-                reply = "Difficulty Hard added.";
+                await AddDifficulty(userId, Difficulty.Hard, cancellationToken);
                 break;
             case "HardRemove":
-                action = _userSettingsRepository.RemoveDifficultyAsync(userId, Difficulty.Hard);
-                reply = "Difficulty Hard removed.";
+                await RemoveDifficulty(userId, Difficulty.Hard, cancellationToken);
                 break;
             case "ProblemSolved":
                 var problemId = int.Parse(data[1]);
-                action = _solvedQuestionsRepository.AddSolvedQuestionAsync(userId, problemId);
+                
+                await _solvedQuestionsRepository
+                    .AddSolvedQuestionAsync(
+                        userId, 
+                        new SolvedQuestionsEntity{
+                            QuestionId = problemId, 
+                            Date = DateTime.UtcNow,
+                        });
+                
                 await _botClient.DeleteMessageAsync(userId, callbackQuery.Message!.MessageId, cancellationToken);
-                reply = $"Problem {problemId} marked as solved.";
+                
+                var reply = $"Problem {problemId} marked as solved.";
+                
+                await _botClient.SendTextMessageAsync(
+                    chatId: callbackQuery.Message!.Chat.Id,
+                    text: reply,
+                    cancellationToken: cancellationToken);
                 break;
             default:
-                throw new ArgumentException();
+                await _botClient.SendTextMessageAsync(
+                    chatId: callbackQuery.Message!.Chat.Id,
+                    text: "Внутренняя ошибка. Попробуйте позже.",
+                    cancellationToken: cancellationToken);
+                throw new ArgumentException("Callback data is not valid.");
         }
 
-        await action;
-        
-        await _botClient.SendTextMessageAsync(
-            chatId: callbackQuery.Message!.Chat.Id,
-            text: reply,
+        await _botClient.AnswerCallbackQueryAsync(
+            callbackQueryId: callbackQuery.Id,
             cancellationToken: cancellationToken);
     }
 
@@ -495,14 +588,14 @@ public class UpdateHandler : IUpdateHandler
     public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception,
         CancellationToken cancellationToken)
     {
-        var ErrorMessage = exception switch
+        var errorMessage = exception switch
         {
             ApiRequestException apiRequestException =>
                 $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
             _ => exception.ToString()
         };
 
-        _logger.LogInformation("HandleError: {ErrorMessage}", ErrorMessage);
+        _logger.LogInformation("HandleError: {ErrorMessage}", errorMessage);
 
         // Cooldown in case of network connection error
         if (exception is RequestException)
