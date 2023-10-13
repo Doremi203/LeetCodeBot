@@ -31,6 +31,7 @@ IHost host = Host.CreateDefaultBuilder(args)
     })
     .Build();
 
+host.MigrationUp();
 await host.RunAsync();
 
 #pragma warning disable CA1050 // Declare types in namespaces

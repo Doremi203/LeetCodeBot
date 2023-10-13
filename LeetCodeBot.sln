@@ -7,8 +7,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{F78E917D-8EF7-4FDF-A8FD-10EF266EBE67}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
-		docker-compose.yml = docker-compose.yml
+		docker-composeProd.yml = docker-composeProd.yml
 		src\LeetCodeBot\appsettings.json = src\LeetCodeBot\appsettings.json
+		DockerfileArm64 = DockerfileArm64
+		DockerfileAmd64 = DockerfileAmd64
+		docker-composeDevelop.yml = docker-composeDevelop.yml
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeetCodeBot.DB.IntegrationTests", "src\LeetCodeBot.DB.IntegrationTests\LeetCodeBot.DB.IntegrationTests.csproj", "{34DF0B9C-D5CD-4659-A8AF-82BF07278B55}"
