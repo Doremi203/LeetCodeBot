@@ -47,14 +47,14 @@ public class NotificationService : BackgroundService
 
                 foreach (var user in users)
                 {
-                    if (user.Difficulty is null or Difficulty.NotSet)
+                    if (user.Difficulty is null or Difficulty.NotSet || user.State != UserState.Registered)
                         continue;
 
                     await SendNotification(user.TelegramUserId, user.Difficulty.Value, stoppingToken);
                 }
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(55), stoppingToken);
+            await Task.Delay(TimeSpan.FromMinutes(50), stoppingToken);
         }
     }
 
