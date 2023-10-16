@@ -97,7 +97,6 @@ public class UpdateHandler : IUpdateHandler
                         "Easy" => AddDifficulty(userId, Difficulty.Easy, cancellationToken),
                         "Medium" => AddDifficulty(userId, Difficulty.Medium, cancellationToken),
                         "Hard" => AddDifficulty(userId, Difficulty.Hard, cancellationToken),
-                        "Any" => AddDifficulty(userId, Difficulty.Any, cancellationToken),
                         "Save difficulty" => SaveDifficulty(),
                         _ => null
                     };
@@ -299,7 +298,6 @@ public class UpdateHandler : IUpdateHandler
                     new KeyboardButton[] { "Easy" },
                     new KeyboardButton[] { "Medium" },
                     new KeyboardButton[] { "Hard" },
-                    new KeyboardButton[] { "Any" },
                     new KeyboardButton[] { "Save difficulty" },
                 })
             {
