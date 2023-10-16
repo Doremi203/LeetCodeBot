@@ -23,9 +23,9 @@ public class NotificationService : BackgroundService
         _logger = logger;
     }
     
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
             var moscowTime = TimeZoneInfo.ConvertTimeToUtc(DateTime.Now);
@@ -44,28 +44,28 @@ public class NotificationService : BackgroundService
                 using var scope = _serviceProvider.CreateScope();
                 var usersRepository = scope.ServiceProvider.GetRequiredService<IUsersRepository>();
                 var users = (await usersRepository.GetUsersByTimeAsync(time)).ToArray();
-
+                var leetcodeQuestionService = scope.ServiceProvider.GetRequiredService<IGetLeetcodeQuestionService>();
+                var questions = await leetcodeQuestionService.GetLeetcodeQuestionsAsync();
+                
                 foreach (var user in users)
                 {
                     if (user.Difficulty is null or Difficulty.NotSet || user.State != UserState.Registered)
                         continue;
 
-                    await SendNotification(user.TelegramUserId, user.Difficulty.Value, stoppingToken);
+                    await SendNotification(user.TelegramUserId, questions.Where(type => type.Difficulty == user.Difficulty.Value).ToArray(), cancellationToken);
                 }
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(50), stoppingToken);
+            await Task.Delay(TimeSpan.FromHours(1), cancellationToken);
         }
     }
 
-    private async Task SendNotification(long userId, Difficulty difficulty, CancellationToken stoppingToken)
+    private async Task SendNotification(long userId, ICollection<LeetcodeQuestionType> questions, CancellationToken cancellationToken)
     {
         LeetcodeQuestionType? question;
         using (var scope = _serviceProvider.CreateScope())
         {
-            var leetcodeQuestionService = scope.ServiceProvider.GetRequiredService<IGetLeetcodeQuestionService>();
             var solvedQuestionsRepository = scope.ServiceProvider.GetRequiredService<ISolvedQuestionsRepository>();
-            var questions = await leetcodeQuestionService.GetLeetcodeQuestionsAsync(difficulty);
             var solvedQuestions = (await solvedQuestionsRepository.GetAllSolvedQuestionsByUserIdAsync(userId))
                 .Select(entity => entity.QuestionId);
             var availableQuestions = questions
@@ -97,6 +97,6 @@ public class NotificationService : BackgroundService
             chatId: userId,
             text: replyMessage,
             replyMarkup: inlineKeyboard,
-            cancellationToken: stoppingToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
