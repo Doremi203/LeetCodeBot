@@ -44,15 +44,13 @@ public class NotificationService : BackgroundService
                 using var scope = _serviceProvider.CreateScope();
                 var usersRepository = scope.ServiceProvider.GetRequiredService<IUsersRepository>();
                 var users = (await usersRepository.GetUsersByTimeAsync(time)).ToArray();
-                var leetcodeQuestionService = scope.ServiceProvider.GetRequiredService<IGetLeetcodeQuestionService>();
-                var questions = await leetcodeQuestionService.GetLeetcodeQuestionsAsync();
                 
                 foreach (var user in users)
                 {
                     if (user.Difficulty is null or Difficulty.NotSet || user.State != UserState.Registered)
                         continue;
 
-                    await SendNotification(user.TelegramUserId, questions.Where(type => type.Difficulty == user.Difficulty.Value).ToArray(), cancellationToken);
+                    await SendNotification(user.TelegramUserId, user.Difficulty.Value, cancellationToken);
                 }
             }
 
@@ -60,7 +58,7 @@ public class NotificationService : BackgroundService
         }
     }
 
-    private async Task SendNotification(long userId, ICollection<LeetcodeQuestionType> questions, CancellationToken cancellationToken)
+    private async Task SendNotification(long userId, Difficulty difficulty, CancellationToken cancellationToken)
     {
         LeetcodeQuestionType? question;
         using (var scope = _serviceProvider.CreateScope())
@@ -68,6 +66,8 @@ public class NotificationService : BackgroundService
             var solvedQuestionsRepository = scope.ServiceProvider.GetRequiredService<ISolvedQuestionsRepository>();
             var solvedQuestions = (await solvedQuestionsRepository.GetAllSolvedQuestionsByUserIdAsync(userId))
                 .Select(entity => entity.QuestionId);
+            var leetcodeQuestionService = scope.ServiceProvider.GetRequiredService<IGetLeetcodeQuestionService>();
+            var questions = await leetcodeQuestionService.GetLeetcodeQuestionsAsync(difficulty);
             var availableQuestions = questions
                 .Where(q 
                     => !solvedQuestions
