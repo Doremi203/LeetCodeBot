@@ -66,9 +66,11 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task BotOnMessageReceived(Message message, CancellationToken cancellationToken)
     {
-        _logger.LogInformation($"Receive message type: {message.Type} from: Userid = {message.From?.Id}, Username = {message.From?.Username}.");
+        _logger.LogInformation($"Receive message type: {message.Type} from: Userid = {message.From?.Id}, " +
+                               $"Username = {message.From?.Username}, " +
+                               $"Time = {TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow"))}.");
         if (message.Text is not { } messageText)
-            return;
+            return; 
         
         var userId = message.From!.Id;
         Task<Message>? action = null;
@@ -133,7 +135,8 @@ public class UpdateHandler : IUpdateHandler
         if (action != null)
         {
             var sentMessage = await action;
-            _logger.LogInformation($"The message with id = {sentMessage.MessageId}: \n {sentMessage.Text} \n was sent to user: Userid = {userId}, Username = {message.From?.Username}");
+            _logger.LogInformation($"The message with id = {sentMessage.MessageId}: \n {sentMessage.Text} \n was sent to user: " +
+                                   $"Userid = {userId}, Username = {message.From?.Username} at {TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow"))}");
         }
 
         return;

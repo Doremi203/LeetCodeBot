@@ -82,7 +82,7 @@ public class NotificationService : BackgroundService
                            $"Id: {question.FrontendQuestionId}\n" +
                            $"Link: https://leetcode.com/problems/{question.TitleSlug}";
         
-        _logger.LogInformation($"MessageSent:{replyMessage} \n To user with UserId: {userId}");
+        _logger.LogInformation($"MessageSent:{replyMessage} \n To user with UserId: {userId} at {TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow"))}");
         
         InlineKeyboardMarkup inlineKeyboard = new(
             new[]

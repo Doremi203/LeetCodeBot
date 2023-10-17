@@ -51,7 +51,6 @@ public class GetLeetcodeQuestionService : IGetLeetcodeQuestionService
         var graphQLResponse = await graphQLHttpClient.SendQueryAsync<LeetcodeQuestionsResponseType>(questionsRequest);
         var questions = graphQLResponse.Data.ProblemsetQuestionList.Questions
             .Where(question => (question.Difficulty & difficulty) == question.Difficulty).ToArray();
-        var count = questions.Count(type => type.Difficulty == Difficulty.Hard);
         return questions;
     }
 }
