@@ -5,6 +5,7 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.InlineQueryResults;
 using Telegram.Bot.Types.ReplyMarkups;
 
@@ -56,12 +57,41 @@ public class UpdateHandler : IUpdateHandler
             { EditedMessage: { } message } => BotOnMessageReceived(message, cancellationToken),
             { CallbackQuery: { } callbackQuery } => BotOnCallbackQueryReceived(callbackQuery, cancellationToken),
             { InlineQuery: { } inlineQuery } => BotOnInlineQueryReceived(inlineQuery, cancellationToken),
-            { ChosenInlineResult: { } chosenInlineResult } => BotOnChosenInlineResultReceived(chosenInlineResult,
-                cancellationToken),
+            { ChosenInlineResult: { } chosenInlineResult } => BotOnChosenInlineResultReceived(chosenInlineResult, cancellationToken),
+            { MyChatMember: { } myChatMember} => BotOnMyChatMemberReceived(myChatMember, cancellationToken),
             _ => UnknownUpdateHandlerAsync(update, cancellationToken)
         };
 
         await handler;
+    }
+
+    private async Task BotOnMyChatMemberReceived(ChatMemberUpdated myChatMember, CancellationToken cancellationToken)
+    {
+        var id = myChatMember.From.Id;
+        var status = myChatMember.NewChatMember.Status;
+        switch (status)
+        {
+            case ChatMemberStatus.Left or ChatMemberStatus.Kicked:
+                await _usersRepository.UpdateUserAsync(
+                    new UserEntity
+                    {
+                        TelegramUserId = id,
+                        State = UserState.BotBlocked
+                    });
+                break;
+            case ChatMemberStatus.Member or ChatMemberStatus.Administrator or ChatMemberStatus.Creator:
+                await _usersRepository.UpdateUserAsync(
+                    new UserEntity
+                    {
+                        TelegramUserId = id,
+                        State = UserState.Registered
+                    });
+                await _botClient.SendTextMessageAsync(
+                    chatId:id, 
+                    text: "Welcome back.", 
+                    cancellationToken: cancellationToken);
+                break;
+        }
     }
 
     private async Task BotOnMessageReceived(Message message, CancellationToken cancellationToken)

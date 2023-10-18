@@ -6,4 +6,5 @@ public enum UserState
     TimeSetup = 1,
     DifficultySetup = 2,
     Registered = 5,
+    BotBlocked = 6
 }
